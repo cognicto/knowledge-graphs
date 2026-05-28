@@ -1,0 +1,401 @@
+# ============================================================
+# TransUnion Credit Risk Ontology — SCHEMA ONLY
+# File: ontology.ttl
+#
+# PURPOSE: This file contains ONLY the schema definition:
+#   - Class definitions (what things ARE)
+#   - Property definitions (what things HAVE)
+#   - Annotations (human-readable descriptions)
+#
+# WHAT THIS FILE IS NOT:
+#   - No data instances (no actual borrowers, loans, lenders)
+#   - No real credit scores
+#   - No actual decisions
+#
+# DATA is in: data.ttl
+# KNOWLEDGE GRAPH = ontology.ttl + data.ttl (loaded together)
+#
+# Connects to 90-Day Plan:
+#   Day 1  → Ontology (this file) ≠ Data (data.ttl). KG = both.
+#   Day 4  → Layer 1 (annotations here) + Layer 2 (shapes here)
+#   Day 5  → Classes from NOUNS in CQs. Properties from VERBS.
+# ============================================================
+
+
+# ============================================================
+# NAMESPACE DECLARATIONS
+# Like Python "import" — defines short aliases for long URIs
+# ============================================================
+
+@prefix rdf:      <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs:     <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix owl:      <http://www.w3.org/2002/07/owl#> .
+@prefix xsd:      <http://www.w3.org/2001/XMLSchema#> .
+@prefix skos:     <http://www.w3.org/2004/02/skos/core#> .
+@prefix dcterms:  <http://purl.org/dc/terms/> .
+@prefix sh:       <http://www.w3.org/ns/shacl#> .
+
+# Our custom namespaces (only the ontology namespace here)
+@prefix tu:       <http://transunion.com/ontology#> .
+
+
+# ============================================================
+# ONTOLOGY METADATA (Layer 1 — Annotational Layer from Day 4)
+# Who built this? When? What version? What is it for?
+# ============================================================
+
+<http://transunion.com/ontology>
+    a owl:Ontology ;
+    rdfs:label       "TransUnion Credit Risk Ontology"@en ;
+    dcterms:description """
+        Schema for credit risk decisioning at TransUnion.
+        Covers borrower assessment, loan applications, bureau data,
+        and decision audit trails. Version 1.0 answers 10 core
+        competency questions defined in Weekend Project 1.
+    """@en ;
+    dcterms:creator  "Goutam" ;
+    dcterms:created  "2026-05-28"^^xsd:date ;
+    dcterms:license  <https://creativecommons.org/licenses/by/4.0/> ;
+    owl:versionInfo  "1.0.0" ;
+    rdfs:comment     "SCHEMA ONLY. Load data.ttl alongside for full Knowledge Graph."@en .
+
+
+# ============================================================
+# CLASS DEFINITIONS (5 Classes)
+#
+# From Day 5: Classes come from NOUNS in Competency Questions
+# From Day 4: Classes have Layer 1 annotations (label, comment,
+#             example, scopeNote) so humans AND LLMs understand them
+#
+# Rule: NO DATA INSTANCES in this section.
+#       Only class declarations and their metadata.
+# ============================================================
+
+# ── CLASS 1: Borrower ───────────────────────────────────────
+# Source: CQ1-5 ("borrower's credit score", "borrower's DTI",
+#         "borrower's delinquencies", "is borrower on watchlist")
+# From Day 5: "borrower" is the NOUN that appears most in CQs → Core class
+
+tu:Borrower
+    a rdfs:Class ;
+
+    # Layer 1 — Annotational (Day 4, Layer 1)
+    rdfs:label      "Borrower"@en ;
+    rdfs:comment    """A person who has applied for or currently holds
+                       a credit facility. The central entity of the
+                       credit decisioning process."""@en ;
+    skos:example    "Rahul Sharma applying for a Rs 2.5L personal loan"@en ;
+    skos:scopeNote  """In scope: individual persons.
+                       Out of scope v1.0: corporate borrowers,
+                       joint applicants (v2.0)."""@en ;
+    dcterms:created "2026-05-28"^^xsd:date .
+
+
+# ── CLASS 2: Lender ─────────────────────────────────────────
+# Source: CQ6 ("issued by which lender")
+# From Day 5: "lender" is a NOUN in the loan application CQs
+
+tu:Lender
+    a rdfs:Class ;
+    rdfs:label    "Lender"@en ;
+    rdfs:comment  """A financial institution authorised to provide
+                     credit facilities to borrowers."""@en ;
+    skos:example  "HDFC Bank, ICICI Bank, Axis Bank"@en ;
+    skos:scopeNote "Covers regulated banking institutions only. NBFCs in v2.0."@en ;
+    dcterms:created "2026-05-28"^^xsd:date .
+
+
+# ── CLASS 3: Loan ───────────────────────────────────────────
+# Source: CQ6 ("what loan amount and purpose is requested"),
+#         CQ2 ("total monthly debt across all loans")
+# From Day 5: "loan" is a NOUN appearing in multiple CQs
+
+tu:Loan
+    a rdfs:Class ;
+    rdfs:label    "Loan"@en ;
+    rdfs:comment  """A credit facility where a lender disburses funds
+                     to a borrower under agreed repayment terms,
+                     including amount, purpose, and tenure."""@en ;
+    skos:example  "Rs 5,00,000 home loan, 20 years, from HDFC Bank"@en ;
+    skos:scopeNote """Covers new applications AND existing loans.
+                      Out of scope: credit cards (revolving credit), v2.0."""@en ;
+    dcterms:created "2026-05-28"^^xsd:date .
+
+
+# ── CLASS 4: CreditReport ───────────────────────────────────
+# Source: CQ1 ("which bureau reported the credit score"),
+#         CQ4 ("delinquencies in last 12 months"),
+#         CQ13 ("which data sources, when fetched")
+# From Day 5: "credit report" is a NOUN in evidence-related CQs
+
+tu:CreditReport
+    a rdfs:Class ;
+    rdfs:label    "Credit Report"@en ;
+    rdfs:comment  """A bureau-sourced document summarising a borrower's
+                     complete credit history: scores, account statuses,
+                     payment history, and enquiries."""@en ;
+    skos:example  "Equifax report for Rahul Sharma, fetched 2026-05-20, CIBIL score 740"@en ;
+    skos:scopeNote """Each bureau produces a separate report.
+                      Canonical score = average of available bureau scores."""@en ;
+    dcterms:created "2026-05-28"^^xsd:date .
+
+
+# ── CLASS 5: Decision ───────────────────────────────────────
+# Source: CQ12 ("which rules evaluated, pass/fail"),
+#         CQ14 ("who decided, when"),
+#         CQ15 ("rejection reasons for FCRA")
+# From Day 5: "decision" is the OUTPUT NOUN in decision-related CQs
+
+tu:Decision
+    a rdfs:Class ;
+    rdfs:label    "Credit Decision"@en ;
+    rdfs:comment  """The formal outcome of a credit evaluation:
+                     APPROVED, REJECTED, or MANUAL_REVIEW.
+                     Contains complete audit trail of inputs,
+                     rules applied, and reasoning."""@en ;
+    skos:example  "Decision APP_001: APPROVED. Rules: score 740 > 700 (PASS), DTI 0.28 < 0.43 (PASS)"@en ;
+    skos:scopeNote """Immutable once created. Forms the legal audit record.
+                      Retained 7 years per regulatory requirement."""@en ;
+    dcterms:created "2026-05-28"^^xsd:date .
+
+
+# ============================================================
+# PROPERTY DEFINITIONS (8 Properties)
+#
+# From Day 5: Properties come from VERBS/ADJECTIVES in CQs
+# From Day 4: Every property has label, comment, domain, range
+#             (Layer 1 + Layer 2 = annotated + typed)
+#
+# KEY DISTINCTION (Day 5):
+#   PREDICATE = the middle position in any triple (syntax)
+#   PROPERTY  = a formally defined, typed, annotated resource
+#               with domain and range (semantics)
+#
+# Every predicate we use is formally declared as a Property here.
+# ============================================================
+
+# ── PROPERTY 1: creditScore ──────────────────────────────────
+# Source: CQ1 "What is the credit score for this borrower?"
+# VERB extracted: "has credit score"
+
+tu:creditScore
+    a rdf:Property ;
+    rdfs:label    "credit score"@en ;
+    rdfs:comment  """Numeric creditworthiness score from a bureau.
+                     CIBIL/FICO scale: 300 (worst) to 850 (best).
+                     Minimum threshold for approval: 700."""@en ;
+    skos:example  "tu:creditScore 740"@en ;
+    rdfs:domain   tu:Borrower ;        # Only Borrowers have credit scores
+    rdfs:range    xsd:integer .        # Value must be a whole number
+
+
+# ── PROPERTY 2: dti ─────────────────────────────────────────
+# Source: CQ3 "What is the borrower's debt-to-income ratio?"
+# VERB extracted: "has debt-to-income ratio"
+
+tu:dti
+    a rdf:Property ;
+    rdfs:label    "debt-to-income ratio"@en ;
+    rdfs:comment  """Total monthly debt obligations divided by
+                     gross monthly income. Expressed as a decimal.
+                     Example: Rs 15,000 debt / Rs 50,000 income = 0.30.
+                     Approval threshold: must be 0.43 or below."""@en ;
+    skos:example  "tu:dti 0.28 (means 28% of income goes to debt)"@en ;
+    rdfs:domain   tu:Borrower ;        # Only Borrowers have DTI
+    rdfs:range    xsd:decimal .        # Value is a decimal number
+
+
+# ── PROPERTY 3: name ────────────────────────────────────────
+# General identification property used by multiple classes
+
+tu:name
+    a rdf:Property ;
+    rdfs:label    "name"@en ;
+    rdfs:comment  "Human-readable name of the entity (person or institution)."@en ;
+    skos:example  "tu:name 'Rahul Sharma'"@en ;
+    rdfs:range    xsd:string .         # No domain restriction — Borrower AND Lender can have names
+
+
+# ── PROPERTY 4: hasLoan ─────────────────────────────────────
+# Source: CQ2 "total monthly debt ACROSS ALL loans",
+#         CQ6 "what loan is being applied for"
+# VERB extracted: "has loan" (relationship between entities)
+
+tu:hasLoan
+    a rdf:Property ;
+    rdfs:label    "has loan"@en ;
+    rdfs:comment  """Associates a borrower with a loan they have
+                     applied for or currently hold. Used to calculate
+                     total debt exposure across all credit facilities."""@en ;
+    skos:example  "data:borrower_001 tu:hasLoan data:loan_001"@en ;
+    rdfs:domain   tu:Borrower ;        # Borrowers have loans
+    rdfs:range    tu:Loan .            # The value must be a Loan entity
+
+
+# ── PROPERTY 5: loanAmount ──────────────────────────────────
+# Source: CQ6 "what loan amount is requested",
+#         CQ2 "total monthly debt" (sum of amounts)
+
+tu:loanAmount
+    a rdf:Property ;
+    rdfs:label    "loan amount"@en ;
+    rdfs:comment  """The principal amount of the loan in Indian Rupees.
+                     Must be a positive value. Used to calculate total
+                     borrower exposure and income multiple checks."""@en ;
+    skos:example  "tu:loanAmount 250000 (Rs 2.5 lakhs)"@en ;
+    rdfs:domain   tu:Loan ;            # Loans have amounts
+    rdfs:range    xsd:decimal .        # Decimal to handle paise if needed
+
+
+# ── PROPERTY 6: loanPurpose ─────────────────────────────────
+# Source: CQ6 "what purpose is the loan for?"
+
+tu:loanPurpose
+    a rdf:Property ;
+    rdfs:label    "loan purpose"@en ;
+    rdfs:comment  """The stated purpose for which loan funds will be used.
+                     Valid values: personal, auto, home, business.
+                     Used for product classification and risk assessment."""@en ;
+    skos:example  "tu:loanPurpose 'home'"@en ;
+    rdfs:domain   tu:Loan ;            # Loans have purposes
+    rdfs:range    xsd:string .         # String (will be SKOS concept in v2.0)
+
+
+# ── PROPERTY 7: issuedBy ────────────────────────────────────
+# Relationship from Loan to Lender
+
+tu:issuedBy
+    a rdf:Property ;
+    rdfs:label    "issued by"@en ;
+    rdfs:comment  """Associates a loan with the lending institution
+                     that issued it or is the target of the application.
+                     Used to track lender exposure and concentration risk."""@en ;
+    skos:example  "data:loan_001 tu:issuedBy data:lender_HDFC"@en ;
+    rdfs:domain   tu:Loan ;            # Loans are issued by Lenders
+    rdfs:range    tu:Lender .          # The value must be a Lender entity
+
+
+# ── PROPERTY 8: decisionOutcome ─────────────────────────────
+# Source: CQ12-15 "what was decided, why, for whom"
+
+tu:decisionOutcome
+    a rdf:Property ;
+    rdfs:label    "decision outcome"@en ;
+    rdfs:comment  """The final credit decision for a loan application.
+                     Valid values: APPROVED, REJECTED, MANUAL_REVIEW.
+                     MANUAL_REVIEW = borderline case requiring human judgment."""@en ;
+    skos:example  "tu:decisionOutcome 'APPROVED'"@en ;
+    rdfs:domain   tu:Decision ;        # Decisions have outcomes
+    rdfs:range    xsd:string .         # String (SKOS controlled vocab in v2.0)
+
+
+# ============================================================
+# SHACL SHAPES (Layer 2 — Schema Layer from Day 4)
+#
+# From Day 4: SHACL is the TYPE SYSTEM, not a linter.
+#             It validates incoming data at the FRONT DOOR.
+#             It also DERIVES new facts through rules.
+#
+# From Day 4: These shapes go at the FOUNDATION.
+#             They are checked BEFORE data enters the graph.
+#
+# NOTE: In v1.0 we include basic constraints only.
+#       Full SHACL rules (auto-derive DTI, riskTier)
+#       will be added in Week 4-5 of the learning plan.
+# ============================================================
+
+# ── SHAPE 1: BorrowerShape ──────────────────────────────────
+# Validates that any Borrower entity has the required properties
+# with correct data types and value ranges
+
+tu:BorrowerShape
+    a sh:NodeShape ;
+    sh:targetClass tu:Borrower ;        # Apply these rules to ALL Borrowers
+    rdfs:label "Borrower Validation Shape"@en ;
+    rdfs:comment "Validates that Borrower entities conform to credit decisioning requirements."@en ;
+
+    # creditScore: required, must be integer 300-850
+    sh:property [
+        sh:path        tu:creditScore ;
+        sh:minCount    1 ;              # Must have at least 1 score
+        sh:maxCount    1 ;              # Cannot have more than 1
+        sh:datatype    xsd:integer ;    # Must be whole number
+        sh:minInclusive 300 ;          # Minimum valid score
+        sh:maxInclusive 850 ;          # Maximum valid score
+        sh:message "Credit score must be an integer between 300 and 850."@en
+    ] ;
+
+    # dti: required, must be positive decimal below 1.0
+    sh:property [
+        sh:path        tu:dti ;
+        sh:minCount    1 ;
+        sh:maxCount    1 ;
+        sh:datatype    xsd:decimal ;
+        sh:minInclusive "0.0"^^xsd:decimal ;
+        sh:maxExclusive "1.0"^^xsd:decimal ;
+        sh:message "DTI must be a decimal between 0.0 and 1.0 (exclusive)."@en
+    ] ;
+
+    # name: required
+    sh:property [
+        sh:path     tu:name ;
+        sh:minCount 1 ;
+        sh:datatype xsd:string ;
+        sh:message "Borrower must have a name."@en
+    ] .
+
+
+# ── SHAPE 2: LoanShape ──────────────────────────────────────
+
+tu:LoanShape
+    a sh:NodeShape ;
+    sh:targetClass tu:Loan ;
+    rdfs:label "Loan Validation Shape"@en ;
+
+    # loanAmount: required, must be positive
+    sh:property [
+        sh:path         tu:loanAmount ;
+        sh:minCount     1 ;
+        sh:datatype     xsd:decimal ;
+        sh:minExclusive "0"^^xsd:decimal ;  # Must be strictly positive
+        sh:message "Loan amount must be a positive value."@en
+    ] ;
+
+    # loanPurpose: required
+    sh:property [
+        sh:path     tu:loanPurpose ;
+        sh:minCount 1 ;
+        sh:datatype xsd:string ;
+        sh:in ( "personal" "auto" "home" "business" ) ;
+        sh:message "Loan purpose must be one of: personal, auto, home, business."@en
+    ] .
+
+
+# ── SHAPE 3: DecisionShape ──────────────────────────────────
+
+tu:DecisionShape
+    a sh:NodeShape ;
+    sh:targetClass tu:Decision ;
+    rdfs:label "Decision Validation Shape"@en ;
+
+    sh:property [
+        sh:path     tu:decisionOutcome ;
+        sh:minCount 1 ;
+        sh:maxCount 1 ;
+        sh:in       ( "APPROVED" "REJECTED" "MANUAL_REVIEW" ) ;
+        sh:message "Decision outcome must be: APPROVED, REJECTED, or MANUAL_REVIEW."@en
+    ] .
+
+
+# ============================================================
+# END OF ONTOLOGY FILE
+#
+# Summary:
+#   5 Classes:     Borrower, Lender, Loan, CreditReport, Decision
+#   8 Properties:  creditScore, dti, name, hasLoan, loanAmount,
+#                  loanPurpose, issuedBy, decisionOutcome
+#   3 SHACL Shapes: BorrowerShape, LoanShape, DecisionShape
+#
+# This file = Layer 1 (Annotational) + Layer 2 (Schema) from Day 4
+# Load this + data.ttl in Python = Knowledge Graph (Day 1)
+# ============================================================

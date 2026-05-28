@@ -1,0 +1,29 @@
+TransUnion Credit Risk — Query Results (Corrected Version)
+Generated: 2026-05-28 13:54:22
+Schema triples (ontology.ttl): 148
+Data triples   (data.ttl):     55
+Total KG triples:              203
+
+KEY CORRECTION:
+  BEFORE: ontology.ttl contained both schema AND data (incorrect)
+  AFTER:  ontology.ttl = schema only. data.ttl = instances only.
+  WHY:    Ontology = blueprint. Data = the building. KG = both together.
+
+QUERY 1: All Borrowers (CQ1 + CQ3)
+============================================================
+  Rahul Sharma: score=740 (EXCELLENT), DTI=0.28
+  Priya Patel: score=665 (FAIR), DTI=0.38
+  Arun Kumar: score=590 (POOR), DTI=0.52
+
+QUERY 2: High Risk Borrowers — score < 650 (CQ9)
+============================================================
+  Arun Kumar: score=590, DTI=0.52 → REJECT
+
+QUERY 3: Total Loan Exposure (CQ2) — multi-hop traversal
+============================================================
+  Priya Patel: Rs 2,650,000 across 2 loan(s)
+  Rahul Sharma: Rs 700,000 across 2 loan(s)
+  Arun Kumar: Rs 350,000 across 1 loan(s)
+
+All queries successful. KG is working correctly.
+ontology.ttl and data.ttl are properly separated.

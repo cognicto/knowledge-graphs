@@ -1,0 +1,229 @@
+# ============================================================
+# TransUnion Credit Risk Data — DATA INSTANCES ONLY
+# File: data.ttl
+#
+# PURPOSE: This file contains ONLY actual data instances:
+#   - Real borrowers (with their credit scores, DTI)
+#   - Real lenders
+#   - Real loan applications
+#   - Real decisions
+#
+# WHAT THIS FILE IS NOT:
+#   - No class definitions (those are in ontology.ttl)
+#   - No property definitions (those are in ontology.ttl)
+#   - No SHACL shapes (those are in ontology.ttl)
+#
+# SCHEMA is in: ontology.ttl
+# KNOWLEDGE GRAPH = ontology.ttl + data.ttl (loaded together in Python)
+#
+# Connects to 90-Day Plan:
+#   Day 1  → This file IS the data graph. ontology.ttl is the ontology.
+#             KG = both files loaded into rdflib.Graph()
+#   Day 3  → Ideally each source (Equifax, internal) is a NAMED GRAPH.
+#             In this v1.0 we simulate this with comments showing
+#             which source each triple would come from.
+#   Day 4  → This file = Layer 3 (Graph Layer) of the 5-layer stack.
+# ============================================================
+
+
+# ============================================================
+# NAMESPACE DECLARATIONS
+# Must declare same namespaces as ontology.ttl
+# ============================================================
+
+@prefix rdf:     <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs:    <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd:     <http://www.w3.org/2001/XMLSchema#> .
+
+# Reference the ontology's namespace (to use tu:Borrower, tu:creditScore etc.)
+@prefix tu:      <http://transunion.com/ontology#> .
+# This file's own namespace for data instances
+@prefix data:    <http://transunion.com/data#> .
+
+
+# ============================================================
+# DATA SOURCE NOTE (Day 3 — Named Graphs concept)
+#
+# In a production system (Week 6 onwards), each block below
+# would be in its OWN named graph:
+#
+#   graph:internal  { data:lender_HDFC ... }
+#   graph:equifax   { data:report_001 ... }
+#   graph:plaid     { data:borrower_001 tu:monthlyIncome ... }
+#
+# For v1.0, we put all data in the default graph (one file).
+# Week 6 will split this into named graphs with provenance.
+# ============================================================
+
+
+# ============================================================
+# DATA: LENDERS (2 instances)
+# Source in production: graph:internal (our internal partner DB)
+# ============================================================
+
+data:lender_HDFC
+    a tu:Lender ;                      # IS A Lender (from ontology.ttl)
+    tu:name    "HDFC Bank" ;           # HAS name
+    rdfs:label "HDFC Bank"@en .
+
+data:lender_ICICI
+    a tu:Lender ;
+    tu:name    "ICICI Bank" ;
+    rdfs:label "ICICI Bank"@en .
+
+
+# ============================================================
+# DATA: BORROWERS (3 instances)
+# Source in production: graph:equifax + graph:internal (merged)
+#
+# Note: Classes used here (tu:Borrower) are DEFINED in ontology.ttl
+#       Properties used (tu:creditScore, tu:dti) are DEFINED in ontology.ttl
+#       SHACL shapes in ontology.ttl will VALIDATE these instances
+#       when both files are loaded together.
+# ============================================================
+
+# BORROWER 1: Rahul Sharma — LOW RISK
+# Score 740 > 700 threshold → PASS
+# DTI 0.28 < 0.43 threshold → PASS
+# Expected decision: APPROVED
+
+data:borrower_001
+    a tu:Borrower ;
+    tu:name         "Rahul Sharma" ;
+    tu:creditScore  740 ;              # Integer 300-850 (validated by BorrowerShape)
+    tu:dti          "0.28"^^xsd:decimal . # Decimal (validated by BorrowerShape)
+
+
+# BORROWER 2: Priya Patel — MEDIUM RISK
+# Score 665 < 700 preferred threshold → BORDERLINE (above minimum 620)
+# DTI 0.38 < 0.43 threshold → PASS
+# Expected decision: MANUAL_REVIEW (score borderline + high loan amount)
+
+data:borrower_002
+    a tu:Borrower ;
+    tu:name         "Priya Patel" ;
+    tu:creditScore  665 ;
+    tu:dti          "0.38"^^xsd:decimal .
+
+
+# BORROWER 3: Arun Kumar — HIGH RISK
+# Score 590 < 620 minimum → FAIL
+# DTI 0.52 > 0.43 maximum → FAIL
+# Expected decision: REJECTED (two rules fail)
+
+data:borrower_003
+    a tu:Borrower ;
+    tu:name         "Arun Kumar" ;
+    tu:creditScore  590 ;
+    tu:dti          "0.52"^^xsd:decimal .
+
+
+# ============================================================
+# DATA: LOANS (5 instances)
+# Source in production: graph:internal (loan origination system)
+# ============================================================
+
+# Rahul's NEW loan application (what we are deciding on)
+data:loan_001
+    a tu:Loan ;
+    tu:loanAmount   "250000"^^xsd:decimal ;   # Rs 2.5 lakhs
+    tu:loanPurpose  "personal" ;               # valid enum (validated by LoanShape)
+    tu:issuedBy     data:lender_HDFC .         # relationship to Lender instance
+
+# Rahul's EXISTING auto loan (already has this — contributes to his total debt)
+data:loan_002
+    a tu:Loan ;
+    tu:loanAmount   "450000"^^xsd:decimal ;   # Rs 4.5 lakhs outstanding
+    tu:loanPurpose  "auto" ;
+    tu:issuedBy     data:lender_ICICI .
+
+# Priya's NEW home loan application (large amount → triggers manual review)
+data:loan_003
+    a tu:Loan ;
+    tu:loanAmount   "2500000"^^xsd:decimal ;  # Rs 25 lakhs (high exposure)
+    tu:loanPurpose  "home" ;
+    tu:issuedBy     data:lender_HDFC .
+
+# Priya's EXISTING personal loan (contributes to her total debt)
+data:loan_005
+    a tu:Loan ;
+    tu:loanAmount   "150000"^^xsd:decimal ;   # Rs 1.5 lakhs outstanding
+    tu:loanPurpose  "personal" ;
+    tu:issuedBy     data:lender_HDFC .
+
+# Arun's NEW personal loan application
+data:loan_004
+    a tu:Loan ;
+    tu:loanAmount   "350000"^^xsd:decimal ;   # Rs 3.5 lakhs
+    tu:loanPurpose  "personal" ;
+    tu:issuedBy     data:lender_ICICI .
+
+
+# ============================================================
+# DATA: BORROWER → LOAN RELATIONSHIPS
+# This is where the GRAPH structure becomes visible.
+# These triples create the EDGES in our knowledge graph.
+# Without these, Borrowers and Loans are disconnected nodes.
+# With these, we can traverse: Borrower → hasLoan → Loan → Amount
+# ============================================================
+
+data:borrower_001 tu:hasLoan data:loan_001 .  # Rahul applied for loan_001
+data:borrower_001 tu:hasLoan data:loan_002 .  # Rahul also has existing loan_002
+
+data:borrower_002 tu:hasLoan data:loan_003 .  # Priya applied for loan_003
+data:borrower_002 tu:hasLoan data:loan_005 .  # Priya also has existing loan_005
+
+data:borrower_003 tu:hasLoan data:loan_004 .  # Arun applied for loan_004
+
+
+# ============================================================
+# DATA: DECISIONS (3 instances)
+# Source in production: graph:decisions (decision engine output)
+#
+# Note: These represent the DECISIONS and their REASONING.
+#       In Week 10, these will become full decision graphs
+#       with: which rules fired, what values, who decided, when.
+# ============================================================
+
+data:decision_001
+    a tu:Decision ;
+    rdfs:label         "Decision for Rahul Sharma application"@en ;
+    tu:decisionOutcome "APPROVED" ;               # validated by DecisionShape
+    rdfs:comment       """APPROVED. Rules evaluated:
+                           (1) creditScore=740 >= threshold 700: PASS.
+                           (2) dti=0.28 <= threshold 0.43: PASS.
+                           All rules passed. Auto-approved."""@en .
+
+data:decision_002
+    a tu:Decision ;
+    rdfs:label         "Decision for Priya Patel application"@en ;
+    tu:decisionOutcome "MANUAL_REVIEW" ;
+    rdfs:comment       """MANUAL_REVIEW. Rules evaluated:
+                           (1) creditScore=665: below preferred 700, above minimum 620: MARGINAL.
+                           (2) dti=0.38 <= 0.43: PASS.
+                           (3) loanAmount=Rs25L is high. Combined risk score borderline.
+                           Escalated to underwriter for human judgment."""@en .
+
+data:decision_003
+    a tu:Decision ;
+    rdfs:label         "Decision for Arun Kumar application"@en ;
+    tu:decisionOutcome "REJECTED" ;
+    rdfs:comment       """REJECTED. Rules evaluated:
+                           (1) creditScore=590 < minimum 620: FAIL.
+                           (2) dti=0.52 > maximum 0.43: FAIL.
+                           Two rules failed. Auto-rejected."""@en .
+
+
+# ============================================================
+# END OF DATA FILE
+#
+# Summary of instances:
+#   2 Lenders:   lender_HDFC, lender_ICICI
+#   3 Borrowers: borrower_001 (LOW), borrower_002 (MEDIUM), borrower_003 (HIGH)
+#   5 Loans:     loan_001 to loan_005
+#   5 Edges:     Borrower hasLoan relationships
+#   3 Decisions: decision_001 (APPROVED), _002 (MANUAL), _003 (REJECTED)
+#
+# This file = Layer 3 (Graph Layer) from Day 4
+# Load this + ontology.ttl together = Knowledge Graph from Day 1
+# ============================================================
