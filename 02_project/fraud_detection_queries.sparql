@@ -1,0 +1,268 @@
+# ============================================================
+# Weekend Project 2: Fraud Detection SPARQL Queries
+# File: fraud_detection_queries.sparql
+#
+# These queries answer:
+#   Q1. Which borrowers are directly connected to defaulters?
+#   Q2. Which borrowers are within 3 hops of a defaulter?
+#   Q3. Which clusters share 3+ entities (shared phone/address/employer/device)?
+#   Q4. Synthetic identity detection (borrowers sharing address)
+#   Q5. Bust-out detection (borrowers sharing employer + device)
+#   Q6. Risk-ranked list of all suspicious applicants
+#   Q7. Full fraud ring membership map
+#
+# Run with: python3 fraud_detection_queries.py
+# Or paste individual queries into any SPARQL endpoint
+# ============================================================
+
+PREFIX rdf:  <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+PREFIX tu:   <http://transunion.com/ontology#>
+PREFIX data: <http://transunion.com/data#>
+PREFIX xsd:  <http://www.w3.org/2001/XMLSchema#>
+
+
+# ============================================================
+# QUERY 1: Direct Connections to Known Defaulters (1 hop)
+# ============================================================
+# Find all borrowers who share at least one entity (phone, address,
+# employer, or device) with a known defaulter.
+# This is the most basic fraud ring detection query.
+
+SELECT DISTINCT ?suspectName ?defaulterName ?connectionType ?sharedEntity
+WHERE {
+    # Step 1: Find known defaulters
+    ?defaulter a tu:Borrower ;
+               tu:hasDefault true ;
+               tu:name ?defaulterName .
+
+    # Step 2: Find suspects connected via shared entities
+    ?suspect a tu:Borrower ;
+             tu:hasDefault false ;
+             tu:name ?suspectName .
+
+    # Step 3: Check each shared entity type
+    {
+        ?defaulter tu:sharesPhone ?shared .
+        ?suspect   tu:sharesPhone ?shared .
+        BIND("SHARED_PHONE" AS ?connectionType)
+        ?shared tu:name ?sharedEntity
+    } UNION {
+        ?defaulter tu:livesAt ?shared .
+        ?suspect   tu:livesAt ?shared .
+        BIND("SHARED_ADDRESS" AS ?connectionType)
+        ?shared tu:name ?sharedEntity
+    } UNION {
+        ?defaulter tu:claimsEmployer ?shared .
+        ?suspect   tu:claimsEmployer ?shared .
+        BIND("SHARED_EMPLOYER" AS ?connectionType)
+        ?shared tu:name ?sharedEntity
+    } UNION {
+        ?defaulter tu:usesDevice ?shared .
+        ?suspect   tu:usesDevice ?shared .
+        BIND("SHARED_DEVICE" AS ?connectionType)
+        ?shared tu:name ?sharedEntity
+    }
+}
+ORDER BY ?defaulterName ?suspectName
+
+
+# ============================================================
+# QUERY 2: 3-Hop Traversal from Defaulters (Property Paths)
+# ============================================================
+# The key query — finds all borrowers reachable within 3 hops
+# through ANY combination of shared relationships.
+# This is where SPARQL property paths shine over SQL.
+
+SELECT DISTINCT ?defaulterName ?suspectName ?suspectScore ?suspectDTI
+WHERE {
+    # Find the defaulter anchor
+    ?defaulter a tu:Borrower ;
+               tu:hasDefault true ;
+               tu:name ?defaulterName .
+
+    # Property path: follow ANY of these relationships, 1 to 3 hops
+    # The | means OR (any of these relationship types)
+    # The {1,3} means 1, 2, or 3 hops deep
+    ?defaulter (tu:sharesPhone|tu:livesAt|tu:claimsEmployer|tu:usesDevice){1,3} ?shared .
+
+    # The shared entity connects back to a suspect borrower
+    ?suspect (tu:sharesPhone|tu:livesAt|tu:claimsEmployer|tu:usesDevice) ?shared .
+
+    # Suspect must be a clean borrower (not already known defaulter)
+    ?suspect a tu:Borrower ;
+             tu:hasDefault false ;
+             tu:name ?suspectName ;
+             tu:creditScore ?suspectScore ;
+             tu:dti ?suspectDTI .
+
+    # Must not be the same person as the defaulter
+    FILTER(?suspect != ?defaulter)
+}
+ORDER BY ?defaulterName ASC(?suspectScore)
+
+
+# ============================================================
+# QUERY 3: Clusters — Borrowers Sharing 3+ Entities
+# ============================================================
+# A cluster with 3 or more shared entities is almost certainly
+# a coordinated fraud ring, not coincidence.
+
+SELECT ?borrower1Name ?borrower2Name (COUNT(DISTINCT ?shared) AS ?sharedCount)
+WHERE {
+    ?b1 a tu:Borrower ;
+        tu:name ?borrower1Name .
+
+    ?b2 a tu:Borrower ;
+        tu:name ?borrower2Name .
+
+    # Count all entity types they share
+    {
+        ?b1 tu:sharesPhone ?shared .
+        ?b2 tu:sharesPhone ?shared .
+    } UNION {
+        ?b1 tu:livesAt ?shared .
+        ?b2 tu:livesAt ?shared .
+    } UNION {
+        ?b1 tu:claimsEmployer ?shared .
+        ?b2 tu:claimsEmployer ?shared .
+    } UNION {
+        ?b1 tu:usesDevice ?shared .
+        ?b2 tu:usesDevice ?shared .
+    }
+
+    # Avoid self-comparison and duplicate pairs
+    FILTER(?b1 != ?b2)
+    FILTER(STR(?borrower1Name) < STR(?borrower2Name))
+}
+GROUP BY ?borrower1Name ?borrower2Name
+HAVING (COUNT(DISTINCT ?shared) >= 2)
+ORDER BY DESC(?sharedCount)
+
+
+# ============================================================
+# QUERY 4: Synthetic Identity Detection
+# ============================================================
+# Multiple unrelated people at the same address = synthetic identity ring.
+# Real families share an address, but so do synthetic identity fraudsters.
+# The combination of address + no family relationship + multiple applications
+# is the fraud signal.
+
+SELECT ?addressName (COUNT(DISTINCT ?borrower) AS ?borrowerCount)
+        (GROUP_CONCAT(DISTINCT ?borrowerName; separator=", ") AS ?borrowersAtAddress)
+        (SUM(IF(?isDefault, 1, 0)) AS ?defaultCount)
+WHERE {
+    ?borrower a tu:Borrower ;
+              tu:name ?borrowerName ;
+              tu:livesAt ?address ;
+              tu:hasDefault ?isDefault .
+    ?address tu:name ?addressName .
+}
+GROUP BY ?addressName
+HAVING (COUNT(DISTINCT ?borrower) >= 2)
+ORDER BY DESC(?borrowerCount)
+
+
+# ============================================================
+# QUERY 5: Bust-Out Detection
+# ============================================================
+# Same employer + same device + multiple credit applications = bust-out signal.
+# Legitimate co-workers might share an employer, but not a device.
+# Same employer AND same device = highly suspicious.
+
+SELECT ?employerName ?deviceName
+       (COUNT(DISTINCT ?borrower) AS ?suspiciousCount)
+       (GROUP_CONCAT(DISTINCT ?borrowerName; separator=", ") AS ?borrowers)
+WHERE {
+    ?borrower a tu:Borrower ;
+              tu:name ?borrowerName ;
+              tu:claimsEmployer ?employer ;
+              tu:usesDevice ?device .
+    ?employer tu:name ?employerName .
+    ?device   tu:name ?deviceName .
+}
+GROUP BY ?employerName ?deviceName
+HAVING (COUNT(DISTINCT ?borrower) >= 2)
+ORDER BY DESC(?suspiciousCount)
+
+
+# ============================================================
+# QUERY 6: Risk-Ranked Suspicious Applicants
+# ============================================================
+# Combine all signals: connected to defaulter + connection type + own score.
+# Produces a risk score for triage — who to investigate first.
+
+SELECT ?suspectName ?suspectScore ?suspectDTI
+       (COUNT(DISTINCT ?defaulterName) AS ?connectedDefaulters)
+       (COUNT(DISTINCT ?connectionType) AS ?riskSignalCount)
+       (GROUP_CONCAT(DISTINCT ?connectionType; separator=" | ") AS ?riskSignals)
+WHERE {
+    ?defaulter a tu:Borrower ;
+               tu:hasDefault true ;
+               tu:name ?defaulterName .
+
+    ?suspect a tu:Borrower ;
+             tu:hasDefault false ;
+             tu:name ?suspectName ;
+             tu:creditScore ?suspectScore ;
+             tu:dti ?suspectDTI .
+
+    {
+        ?defaulter tu:sharesPhone ?shared .
+        ?suspect   tu:sharesPhone ?shared .
+        BIND("SHARED_PHONE" AS ?connectionType)
+    } UNION {
+        ?defaulter tu:livesAt ?shared .
+        ?suspect   tu:livesAt ?shared .
+        BIND("SHARED_ADDRESS" AS ?connectionType)
+    } UNION {
+        ?defaulter tu:claimsEmployer ?shared .
+        ?suspect   tu:claimsEmployer ?shared .
+        BIND("SHARED_EMPLOYER" AS ?connectionType)
+    } UNION {
+        ?defaulter tu:usesDevice ?shared .
+        ?suspect   tu:usesDevice ?shared .
+        BIND("SHARED_DEVICE" AS ?connectionType)
+    }
+}
+GROUP BY ?suspectName ?suspectScore ?suspectDTI
+ORDER BY DESC(?riskSignalCount) ASC(?suspectScore)
+
+
+# ============================================================
+# QUERY 7: Full Fraud Ring Membership
+# ============================================================
+# Show which fraud ring each borrower belongs to,
+# and their default status. Clean borrowers should NOT appear.
+
+SELECT ?borrowerName ?creditScore ?hasDefault ?fraudRing
+WHERE {
+    ?borrower a tu:Borrower ;
+              tu:name ?borrowerName ;
+              tu:creditScore ?creditScore ;
+              tu:hasDefault ?hasDefault .
+
+    # Only return borrowers with explicit fraud ring membership
+    OPTIONAL { ?borrower tu:fraudRing ?fraudRing }
+
+    # Filter: only show flagged borrowers (has a ring assignment)
+    FILTER(BOUND(?fraudRing))
+}
+ORDER BY ?fraudRing ASC(?creditScore)
+
+
+# ============================================================
+# QUERY 8: Default Event Details
+# ============================================================
+# Full details of each default event for audit trail.
+
+SELECT ?borrowerName ?defaultAmount ?defaultDate ?defaultLender
+WHERE {
+    ?borrower a tu:Borrower ;
+              tu:name ?borrowerName ;
+              tu:hasDefaultRecord ?defaultRecord .
+    ?defaultRecord tu:defaultAmount ?defaultAmount ;
+                   tu:defaultDate   ?defaultDate ;
+                   tu:defaultLender ?defaultLender .
+}
+ORDER BY ?defaultDate
