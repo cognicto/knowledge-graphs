@@ -1,0 +1,244 @@
+# ============================================================
+# Day 7 Exercise: Turtle Syntax Mastery
+# File: borrower_loan.ttl
+#
+# Goal: Master ALL Turtle syntax features by building a
+#       complete Borrower → Loan model from scratch.
+#
+# Features demonstrated:
+#   - @prefix declarations (6 standard + 2 custom)
+#   - a shortcut for rdf:type
+#   - Semicolons ; for same subject, new predicate
+#   - Commas , for same predicate, multiple objects
+#   - Dots . to end a subject block
+#   - Literal types (integer, decimal, date, boolean, string)
+#   - Language tags @en on labels
+#   - Blank nodes [] for anonymous intermediate nodes
+#   - Nested descriptions
+#
+# Reflection: Why is Turtle better than RDF/XML?
+#   - Human-readable → easier to review, debug, maintain
+#   - Compact → 10 lines of Turtle = 50+ lines of RDF/XML
+#   - Writable by hand → developers can create/edit directly
+#   - Same triples → rdflib loads identically regardless of format
+# ============================================================
+
+
+# ── SECTION 1: PREFIX DECLARATIONS ──────────────────────────
+# The 6 standard prefixes you need in EVERY Turtle file
+# Plus your 2 custom namespaces
+
+@prefix rdf:     <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs:    <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix owl:     <http://www.w3.org/2002/07/owl#> .
+@prefix xsd:     <http://www.w3.org/2001/XMLSchema#> .
+@prefix skos:    <http://www.w3.org/2004/02/skos/core#> .
+@prefix dcterms: <http://purl.org/dc/terms/> .
+
+# Custom namespaces (always after standards)
+@prefix tu:      <http://transunion.com/ontology#> .
+@prefix data:    <http://transunion.com/data#> .
+
+
+# ── SECTION 2: CLASS DEFINITIONS ────────────────────────────
+# Using all annotation properties from Layer 1 (Day 4)
+# Notice: semicolons chain multiple predicates on same subject
+
+tu:Borrower
+    a rdfs:Class ;                                  # semicolon = more coming
+    rdfs:label    "Borrower"@en ;                  # @en = English language tag
+    rdfs:comment  "A person applying for credit"@en ;
+    skos:example  "Rahul Sharma, PAN ABCDE1234F"@en ;
+    dcterms:created "2026-05-28"^^xsd:date .       # DOT = done with tu:Borrower
+
+tu:Loan
+    a rdfs:Class ;
+    rdfs:label   "Loan"@en ;
+    rdfs:comment "A credit facility provided to a borrower"@en ;
+    skos:example "Rs 5,00,000 personal loan at 12%, 36 months"@en .
+
+tu:Lender
+    a rdfs:Class ;
+    rdfs:label   "Lender"@en ;
+    rdfs:comment "A financial institution providing credit"@en .
+
+
+# ── SECTION 3: PROPERTY DEFINITIONS ─────────────────────────
+# Every predicate declared as an owl:ObjectProperty or owl:DatatypeProperty
+
+# Object Properties (entity → entity)
+tu:hasLoan
+    a owl:ObjectProperty ;
+    rdfs:label   "has loan"@en ;
+    rdfs:comment "Associates a borrower with a loan"@en ;
+    rdfs:domain  tu:Borrower ;                    # domain = which class HAS this
+    rdfs:range   tu:Loan .                        # range  = what class it points TO
+
+tu:issuedBy
+    a owl:ObjectProperty ;
+    rdfs:label   "issued by"@en ;
+    rdfs:comment "Associates a loan with its issuing lender"@en ;
+    rdfs:domain  tu:Loan ;
+    rdfs:range   tu:Lender .
+
+# Datatype Properties (entity → value)
+tu:creditScore
+    a owl:DatatypeProperty ;
+    rdfs:label   "credit score"@en ;
+    rdfs:comment "Numeric creditworthiness score 300-850"@en ;
+    rdfs:domain  tu:Borrower ;
+    rdfs:range   xsd:integer .                    # value must be integer
+
+tu:dti
+    a owl:DatatypeProperty ;
+    rdfs:label   "debt-to-income ratio"@en ;
+    rdfs:domain  tu:Borrower ;
+    rdfs:range   xsd:decimal .
+
+tu:loanAmount
+    a owl:DatatypeProperty ;
+    rdfs:label   "loan amount"@en ;
+    rdfs:domain  tu:Loan ;
+    rdfs:range   xsd:decimal .
+
+tu:loanPurpose
+    a owl:DatatypeProperty ;
+    rdfs:label   "loan purpose"@en ;
+    rdfs:domain  tu:Loan ;
+    rdfs:range   xsd:string .
+
+tu:interestRate
+    a owl:DatatypeProperty ;
+    rdfs:label   "interest rate (annual %)"@en ;
+    rdfs:domain  tu:Loan ;
+    rdfs:range   xsd:decimal .
+
+tu:loanTenureMonths
+    a owl:DatatypeProperty ;
+    rdfs:label   "loan tenure in months"@en ;
+    rdfs:domain  tu:Loan ;
+    rdfs:range   xsd:integer .
+
+
+# ── SECTION 4: DATA INSTANCES ────────────────────────────────
+# Demonstrating EVERY literal type and Turtle shortcut
+
+# ── Lender (simple entity) ───────────────────────────────────
+data:lender_HDFC
+    a tu:Lender ;
+    rdfs:label "HDFC Bank"@en ;
+    rdfs:label "HDFC बैंक"@hi .     # Comma inside same predicate (WRONG here),
+                                      # multiple labels use semicolons:
+
+# Corrected: multiple language labels with semicolons
+data:lender_ICICI
+    a tu:Lender ;
+    rdfs:label "ICICI Bank"@en ;      # English label
+    rdfs:label "ICICI बैंक"@hi .     # Hindi label — semicolons separate them
+
+
+# ── Loans (different literal types demonstrated) ─────────────
+
+# Loan 1: Personal loan — shows integer, decimal, string, date
+data:loan_PERSONAL_001
+    a tu:Loan ;
+    tu:loanAmount      500000 ;                        # integer (no quotes, no ^^)
+    tu:loanPurpose     "personal" ;                    # string (quotes, no ^^)
+    tu:interestRate    "12.5"^^xsd:decimal ;           # decimal (quotes + ^^)
+    tu:loanTenureMonths 36 ;                           # integer
+    rdfs:label         "Personal Loan - Rahul Sharma"@en ;
+    tu:issuedBy        data:lender_HDFC .              # object property → URI
+
+# Loan 2: Home loan — Rahul also has this
+data:loan_HOME_002
+    a tu:Loan ;
+    tu:loanAmount      3500000 ;
+    tu:loanPurpose     "home" ;
+    tu:interestRate    "8.75"^^xsd:decimal ;
+    tu:loanTenureMonths 240 ;                          # 20 years = 240 months
+    rdfs:label         "Home Loan - Rahul Sharma"@en ;
+    tu:issuedBy        data:lender_ICICI .
+
+# Loan 3: Priya's auto loan
+data:loan_AUTO_003
+    a tu:Loan ;
+    tu:loanAmount      800000 ;
+    tu:loanPurpose     "auto" ;
+    tu:interestRate    "9.5"^^xsd:decimal ;
+    tu:loanTenureMonths 60 ;
+    rdfs:label         "Auto Loan - Priya Patel"@en ;
+    tu:issuedBy        data:lender_HDFC .
+
+
+# ── Borrowers (demonstrating comma for multiple objects) ──────
+
+# Borrower 1: Rahul Sharma — has TWO loans (comma for multiple objects!)
+data:borrower_RAHUL
+    a tu:Borrower ;
+    rdfs:label         "Rahul Sharma"@en ;
+    tu:creditScore     755 ;              # integer
+    tu:dti             "0.27"^^xsd:decimal ;
+    tu:hasLoan         data:loan_PERSONAL_001 ,   # COMMA = same predicate, another loan
+                       data:loan_HOME_002 .        # DOT = done with Rahul
+
+# Borrower 2: Priya Patel — one loan
+data:borrower_PRIYA
+    a tu:Borrower ;
+    rdfs:label     "Priya Patel"@en ;
+    tu:creditScore 680 ;
+    tu:dti         "0.38"^^xsd:decimal ;
+    tu:hasLoan     data:loan_AUTO_003 .   # single loan, just a dot
+
+
+# ── SECTION 5: BLANK NODES ───────────────────────────────────
+# Used for anonymous intermediate nodes that need no URI
+
+# Example: A loan installment detail (no permanent identity needed)
+data:loan_PERSONAL_001 tu:hasInstallmentDetail [
+    tu:monthlyEMI     "16,105"^^xsd:string ;   # EMI amount
+    tu:firstDueDate   "2026-07-01"^^xsd:date ;
+    tu:lastDueDate    "2029-06-01"^^xsd:date
+] .
+
+# Example: Contact information (anonymous, attached to borrower)
+data:borrower_RAHUL tu:hasContactInfo [
+    a tu:ContactInfo ;
+    tu:phoneNumber "9876543210" ;
+    tu:emailType "work"
+] .
+
+
+# ── SECTION 6: NAMED GRAPHS PREVIEW (TriG format) ────────────
+# Regular Turtle doesn't support named graphs directly.
+# TriG extends Turtle with named graph blocks.
+# (Shown here as comments — will use in Week 6)
+#
+# GRAPH <http://transunion.com/data/equifax> {
+#     data:borrower_RAHUL tu:creditScore 755 ;
+#                         tu:reportDate "2026-05-20"^^xsd:date .
+# }
+#
+# GRAPH <http://transunion.com/data/experian> {
+#     data:borrower_RAHUL tu:creditScore 748 .
+# }
+
+
+# ============================================================
+# TURTLE SYNTAX SUMMARY
+#
+# @prefix  = declare namespace alias
+# a        = shortcut for rdf:type
+# ;        = same subject, new predicate (more to say)
+# ,        = same subject AND predicate, new object
+# .        = done with this subject
+# "text"   = plain string
+# "text"@en = string with language tag
+# 720      = plain integer (no quotes)
+# "0.28"^^xsd:decimal = typed decimal value
+# "2026-05-28"^^xsd:date = typed date value
+# true/false = boolean (no quotes)
+# _:blank  = blank node with ID
+# [ ... ]  = anonymous blank node (inline)
+# <URI>    = full URI in angle brackets
+# prefix:local = prefixed name (expands to full URI)
+# ============================================================

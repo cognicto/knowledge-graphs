@@ -1,0 +1,551 @@
+# ============================================================
+# Weekend Project 2: Fraud Detection Knowledge Graph
+# File: fraud_network.ttl
+#
+# Scenario: Three overlapping fraud rings in a P2P lending network.
+# 10 borrowers, shared phones/addresses/employers reveal hidden clusters.
+#
+# FRAUD RINGS:
+#   Ring A — Synthetic Identity Ring (Vijay, Rajan, Sunita)
+#     → Share phone + address. Vijay defaulted. Others look clean.
+#
+#   Ring B — Bust-Out Scheme (Arjun, Meera, Dev)
+#     → Same employer (fake company). Same device.
+#     → Open multiple credit lines simultaneously, then vanish.
+#
+#   Ring C — Family Collusion (Priya, Suresh, Lakshmi)
+#     → Same address (family). Suresh defaulted.
+#     → Others used to cycle debt before default.
+#
+# CLEAN BORROWERS (control group):
+#   Rahul, Anita — no shared entities, no defaults
+#
+# TransUnion Context:
+#   Synthetic identity: combine real + fake details to create new identity
+#   Bust-out scheme: accumulate credit limits, max out all, disappear
+# ============================================================
+
+
+# ── NAMESPACES ──────────────────────────────────────────────────────────────
+
+@prefix rdf:     <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs:    <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix owl:     <http://www.w3.org/2002/07/owl#> .
+@prefix xsd:     <http://www.w3.org/2001/XMLSchema#> .
+@prefix skos:    <http://www.w3.org/2004/02/skos/core#> .
+@prefix dcterms: <http://purl.org/dc/terms/> .
+@prefix tu:      <http://transunion.com/ontology#> .
+@prefix data:    <http://transunion.com/data#> .
+
+
+# ── ONTOLOGY METADATA ───────────────────────────────────────────────────────
+
+<http://transunion.com/fraud-network>
+    a owl:Ontology ;
+    rdfs:label       "TransUnion Fraud Detection Network — Weekend Project 2"@en ;
+    dcterms:description """
+        10-borrower fraud detection knowledge graph demonstrating synthetic
+        identity rings, bust-out schemes, and family collusion patterns.
+        Designed for SPARQL property path queries and Neo4j visualization.
+    """@en ;
+    dcterms:creator  "Goutam" ;
+    dcterms:created  "2026-05-29"^^xsd:date ;
+    owl:versionInfo  "2.0.0" .
+
+
+# ── CLASS DEFINITIONS ────────────────────────────────────────────────────────
+
+tu:Borrower a rdfs:Class ;
+    rdfs:label    "Borrower"@en ;
+    rdfs:comment  "Individual who has applied for credit. Core entity."@en ;
+    skos:example  "Rahul Sharma — clean borrower, score 755"@en .
+
+tu:PhoneNumber a rdfs:Class ;
+    rdfs:label    "Phone Number"@en ;
+    rdfs:comment  "A phone number shared by one or more borrowers. Shared phone = risk signal."@en ;
+    skos:example  "9876543210 — used by Vijay and Rajan (Ring A)"@en .
+
+tu:Address a rdfs:Class ;
+    rdfs:label    "Address"@en ;
+    rdfs:comment  "A physical address. Multiple unrelated borrowers at same address = risk signal."@en ;
+    skos:example  "12 MG Road Bangalore — used by Ring A members"@en .
+
+tu:Employer a rdfs:Class ;
+    rdfs:label    "Employer"@en ;
+    rdfs:comment  "An employer entity. Fake or shell employers used in bust-out schemes."@en ;
+    skos:example  "FastCash Solutions — unregistered employer used by Ring B"@en .
+
+tu:Device a rdfs:Class ;
+    rdfs:label    "Device"@en ;
+    rdfs:comment  "A device (phone/laptop/browser fingerprint). Multiple accounts on same device = fraud signal."@en ;
+    skos:example  "DEVICE_HASH_A3F8 — shared by Ring B members"@en .
+
+tu:Default a rdfs:Class ;
+    rdfs:label    "Loan Default"@en ;
+    rdfs:comment  "A recorded loan default event with amount and date."@en ;
+    skos:example  "Vijay defaulted Rs 4.5L on 2025-09-15"@en .
+
+
+# ── PROPERTY DEFINITIONS ─────────────────────────────────────────────────────
+
+tu:name a owl:DatatypeProperty ;
+    rdfs:label   "name"@en ;
+    rdfs:range   xsd:string .
+
+tu:creditScore a owl:DatatypeProperty ;
+    rdfs:label   "credit score"@en ;
+    rdfs:domain  tu:Borrower ;
+    rdfs:range   xsd:integer .
+
+tu:dti a owl:DatatypeProperty ;
+    rdfs:label   "debt-to-income ratio"@en ;
+    rdfs:domain  tu:Borrower ;
+    rdfs:range   xsd:decimal .
+
+tu:hasDefault a owl:DatatypeProperty ;
+    rdfs:label   "has default"@en ;
+    rdfs:domain  tu:Borrower ;
+    rdfs:range   xsd:boolean .
+
+tu:fraudRing a owl:DatatypeProperty ;
+    rdfs:label   "fraud ring membership"@en ;
+    rdfs:domain  tu:Borrower ;
+    rdfs:range   xsd:string .
+
+tu:city a owl:DatatypeProperty ;
+    rdfs:label   "city"@en ;
+    rdfs:range   xsd:string .
+
+# Relationship properties
+tu:sharesPhone a owl:ObjectProperty ;
+    rdfs:label   "shares phone"@en ;
+    rdfs:comment "Borrower uses this phone number. Shared phone = fraud signal."@en ;
+    rdfs:domain  tu:Borrower ;
+    rdfs:range   tu:PhoneNumber .
+
+tu:livesAt a owl:ObjectProperty ;
+    rdfs:label   "lives at"@en ;
+    rdfs:comment "Borrower registered at this address. Multiple borrowers at same address = risk."@en ;
+    rdfs:domain  tu:Borrower ;
+    rdfs:range   tu:Address .
+
+tu:claimsEmployer a owl:ObjectProperty ;
+    rdfs:label   "claims employer"@en ;
+    rdfs:comment "Borrower claims employment at this entity. Shell employers used in bust-out."@en ;
+    rdfs:domain  tu:Borrower ;
+    rdfs:range   tu:Employer .
+
+tu:usesDevice a owl:ObjectProperty ;
+    rdfs:label   "uses device"@en ;
+    rdfs:comment "Borrower accessed platform from this device. Same device = coordinated accounts."@en ;
+    rdfs:domain  tu:Borrower ;
+    rdfs:range   tu:Device .
+
+tu:hasDefaultRecord a owl:ObjectProperty ;
+    rdfs:label   "has default record"@en ;
+    rdfs:domain  tu:Borrower ;
+    rdfs:range   tu:Default .
+
+# Default properties
+tu:defaultAmount a owl:DatatypeProperty ;
+    rdfs:label  "default amount"@en ;
+    rdfs:domain tu:Default ;
+    rdfs:range  xsd:decimal .
+
+tu:defaultDate a owl:DatatypeProperty ;
+    rdfs:label  "default date"@en ;
+    rdfs:domain tu:Default ;
+    rdfs:range  xsd:date .
+
+tu:defaultLender a owl:DatatypeProperty ;
+    rdfs:label  "defaulted lender"@en ;
+    rdfs:domain tu:Default ;
+    rdfs:range  xsd:string .
+
+
+# ============================================================
+# DATA INSTANCES
+# ============================================================
+
+
+# ── SHARED ENTITIES (phones, addresses, employers, devices) ──
+
+# Ring A shared phone — Vijay + Rajan
+data:phone_RING_A
+    a tu:PhoneNumber ;
+    tu:name "9876543210" ;
+    rdfs:label "Phone 9876543210 — Ring A shared"@en .
+
+# Ring A shared address — Vijay + Rajan + Sunita
+data:address_RING_A
+    a tu:Address ;
+    tu:name "12 MG Road, Koramangala, Bangalore 560034" ;
+    rdfs:label "12 MG Road — Ring A shared address"@en .
+
+# Ring B shared employer — fake company
+data:employer_RING_B
+    a tu:Employer ;
+    tu:name "FastCash Solutions Pvt Ltd" ;
+    rdfs:label "FastCash Solutions — unregistered bust-out employer"@en ;
+    rdfs:comment "GSTIN 29AABCU9603R1Z1 — flagged as non-operational shell entity"@en .
+
+# Ring B shared device — same laptop fingerprint
+data:device_RING_B
+    a tu:Device ;
+    tu:name "LAPTOP_HASH_A3F8B2C1" ;
+    rdfs:label "Device HASH_A3F8 — Ring B shared device"@en .
+
+# Ring C shared address — family home
+data:address_RING_C
+    a tu:Address ;
+    tu:name "45 Patel Nagar, Sector 3, Delhi 110008" ;
+    rdfs:label "45 Patel Nagar — Ring C family address"@en .
+
+# Clean borrowers' distinct entities
+data:phone_RAHUL
+    a tu:PhoneNumber ;
+    tu:name "9112233445" .
+
+data:address_RAHUL
+    a tu:Address ;
+    tu:name "8 Palm Grove, Bandra, Mumbai 400050" .
+
+data:employer_RAHUL
+    a tu:Employer ;
+    tu:name "Tata Consultancy Services Ltd" .
+
+data:phone_ANITA
+    a tu:PhoneNumber ;
+    tu:name "9334455667" .
+
+data:address_ANITA
+    a tu:Address ;
+    tu:name "22 Rose Avenue, Adyar, Chennai 600020" .
+
+data:employer_ANITA
+    a tu:Employer ;
+    tu:name "Infosys Ltd" .
+
+# Ring B individual phones (different phones but same device)
+data:phone_ARJUN
+    a tu:PhoneNumber ;
+    tu:name "9765432108" .
+
+data:phone_MEERA_B
+    a tu:PhoneNumber ;
+    tu:name "9654321087" .
+
+data:phone_DEV
+    a tu:PhoneNumber ;
+    tu:name "9543210976" .
+
+# Ring C individual phones
+data:phone_PRIYA_C
+    a tu:PhoneNumber ;
+    tu:name "9432109865" .
+
+data:phone_SURESH
+    a tu:PhoneNumber ;
+    tu:name "9321098754" .
+
+data:phone_LAKSHMI
+    a tu:PhoneNumber ;
+    tu:name "9210987643" .
+
+# Ring A — Sunita separate phone (but same address)
+data:phone_SUNITA
+    a tu:PhoneNumber ;
+    tu:name "9876543211" .
+
+
+# ── DEFAULT RECORDS ───────────────────────────────────────────
+
+# Ring A: Vijay defaulted
+data:default_VIJAY
+    a tu:Default ;
+    tu:defaultAmount "450000"^^xsd:decimal ;
+    tu:defaultDate   "2025-09-15"^^xsd:date ;
+    tu:defaultLender "HDFC Bank" ;
+    rdfs:label       "Vijay Kumar Default — Rs 4.5L — 2025-09-15"@en .
+
+# Ring C: Suresh defaulted
+data:default_SURESH
+    a tu:Default ;
+    tu:defaultAmount "280000"^^xsd:decimal ;
+    tu:defaultDate   "2025-11-20"^^xsd:date ;
+    tu:defaultLender "ICICI Bank" ;
+    rdfs:label       "Suresh Patel Default — Rs 2.8L — 2025-11-20"@en .
+
+# Ring B: Dev defaulted (bust-out)
+data:default_DEV
+    a tu:Default ;
+    tu:defaultAmount "920000"^^xsd:decimal ;
+    tu:defaultDate   "2026-01-10"^^xsd:date ;
+    tu:defaultLender "SBI" ;
+    rdfs:label       "Dev Mehta Default — Rs 9.2L — 2026-01-10"@en .
+
+
+# ============================================================
+# BORROWERS
+# ============================================================
+
+# ── RING A: SYNTHETIC IDENTITY RING ──────────────────────────
+# Pattern: Multiple borrowers at same address + same phone
+# Fraud type: Synthetic identity (combine real + invented details)
+
+# A1: Vijay Kumar — KNOWN DEFAULTER (anchor of Ring A)
+data:borrower_VIJAY
+    a tu:Borrower ;
+    tu:name         "Vijay Kumar" ;
+    tu:creditScore  480 ;
+    tu:dti          "0.72"^^xsd:decimal ;
+    tu:hasDefault   true ;
+    tu:fraudRing    "Ring_A_Synthetic_Identity" ;
+    tu:city         "Bangalore" ;
+    tu:sharesPhone       data:phone_RING_A ;
+    tu:livesAt           data:address_RING_A ;
+    tu:hasDefaultRecord  data:default_VIJAY .
+
+# A2: Rajan Verma — looks clean to SQL, connected to Vijay via phone+address
+data:borrower_RAJAN
+    a tu:Borrower ;
+    tu:name         "Rajan Verma" ;
+    tu:creditScore  695 ;           # Looks acceptable!
+    tu:dti          "0.34"^^xsd:decimal ;
+    tu:hasDefault   false ;
+    tu:fraudRing    "Ring_A_Synthetic_Identity" ;
+    tu:city         "Bangalore" ;
+    tu:sharesPhone  data:phone_RING_A ;      # SAME PHONE as Vijay!
+    tu:livesAt      data:address_RING_A .    # SAME ADDRESS as Vijay!
+
+# A3: Sunita Rao — at same address as Vijay (synthetic identity, forged documents)
+data:borrower_SUNITA
+    a tu:Borrower ;
+    tu:name         "Sunita Rao" ;
+    tu:creditScore  720 ;           # HIGH score — synthetic identity with clean history
+    tu:dti          "0.28"^^xsd:decimal ;
+    tu:hasDefault   false ;
+    tu:fraudRing    "Ring_A_Synthetic_Identity" ;
+    tu:city         "Bangalore" ;
+    tu:sharesPhone  data:phone_SUNITA ;      # Different phone but same address
+    tu:livesAt      data:address_RING_A .    # SAME ADDRESS as Vijay!
+
+
+# ── RING B: BUST-OUT SCHEME ───────────────────────────────────
+# Pattern: Same employer + same device used for multiple applications
+# Fraud type: Open many credit lines, max out, then vanish
+
+# B1: Arjun Kapoor — Ring B member
+data:borrower_ARJUN
+    a tu:Borrower ;
+    tu:name         "Arjun Kapoor" ;
+    tu:creditScore  660 ;
+    tu:dti          "0.41"^^xsd:decimal ;
+    tu:hasDefault   false ;
+    tu:fraudRing    "Ring_B_Bust_Out" ;
+    tu:city         "Mumbai" ;
+    tu:sharesPhone     data:phone_ARJUN ;
+    tu:claimsEmployer  data:employer_RING_B ;  # FAKE EMPLOYER
+    tu:usesDevice      data:device_RING_B .    # SHARED DEVICE
+
+# B2: Meera Sharma — Ring B member (different from Meera Nair in Day 10)
+data:borrower_MEERA_B
+    a tu:Borrower ;
+    tu:name         "Meera Sharma" ;
+    tu:creditScore  710 ;           # Good score — bust-out fraudsters build credit first
+    tu:dti          "0.31"^^xsd:decimal ;
+    tu:hasDefault   false ;
+    tu:fraudRing    "Ring_B_Bust_Out" ;
+    tu:city         "Mumbai" ;
+    tu:sharesPhone     data:phone_MEERA_B ;
+    tu:claimsEmployer  data:employer_RING_B ;  # SAME FAKE EMPLOYER
+    tu:usesDevice      data:device_RING_B .    # SAME DEVICE
+
+# B3: Dev Mehta — KNOWN DEFAULTER, Ring B anchor (bust-out complete)
+data:borrower_DEV
+    a tu:Borrower ;
+    tu:name         "Dev Mehta" ;
+    tu:creditScore  510 ;           # Score collapsed after default
+    tu:dti          "0.85"^^xsd:decimal ;
+    tu:hasDefault   true ;
+    tu:fraudRing    "Ring_B_Bust_Out" ;
+    tu:city         "Mumbai" ;
+    tu:sharesPhone      data:phone_DEV ;
+    tu:claimsEmployer   data:employer_RING_B ; # SAME FAKE EMPLOYER
+    tu:usesDevice       data:device_RING_B ;   # SAME DEVICE
+    tu:hasDefaultRecord data:default_DEV .
+
+
+# ── RING C: FAMILY COLLUSION ──────────────────────────────────
+# Pattern: Family at same address, cycle debt between members
+# Fraud type: Debt cycling — transfer debt to new family member when one defaults
+
+# C1: Suresh Patel — KNOWN DEFAULTER, Ring C anchor
+data:borrower_SURESH
+    a tu:Borrower ;
+    tu:name         "Suresh Patel" ;
+    tu:creditScore  540 ;
+    tu:dti          "0.65"^^xsd:decimal ;
+    tu:hasDefault   true ;
+    tu:fraudRing    "Ring_C_Family_Collusion" ;
+    tu:city         "Delhi" ;
+    tu:sharesPhone      data:phone_SURESH ;
+    tu:livesAt          data:address_RING_C ;   # FAMILY ADDRESS
+    tu:hasDefaultRecord data:default_SURESH .
+
+# C2: Priya Patel — lives at same address (family), new applications after Suresh defaulted
+data:borrower_PRIYA_C
+    a tu:Borrower ;
+    tu:name         "Priya Patel" ;
+    tu:creditScore  685 ;           # Good score — debt cycling to clean family member
+    tu:dti          "0.37"^^xsd:decimal ;
+    tu:hasDefault   false ;
+    tu:fraudRing    "Ring_C_Family_Collusion" ;
+    tu:city         "Delhi" ;
+    tu:sharesPhone  data:phone_PRIYA_C ;
+    tu:livesAt      data:address_RING_C .      # SAME ADDRESS as Suresh!
+
+# C3: Lakshmi Patel — also at family address, recently applied for large loan
+data:borrower_LAKSHMI
+    a tu:Borrower ;
+    tu:name         "Lakshmi Patel" ;
+    tu:creditScore  640 ;
+    tu:dti          "0.44"^^xsd:decimal ;
+    tu:hasDefault   false ;
+    tu:fraudRing    "Ring_C_Family_Collusion" ;
+    tu:city         "Delhi" ;
+    tu:sharesPhone  data:phone_LAKSHMI ;
+    tu:livesAt      data:address_RING_C .      # SAME ADDRESS as Suresh!
+
+
+# ── CLEAN BORROWERS (control group) ───────────────────────────
+# These borrowers have no shared entities and no defaults
+# Queries should NOT flag these as suspicious
+
+data:borrower_RAHUL
+    a tu:Borrower ;
+    tu:name         "Rahul Mehta" ;
+    tu:creditScore  755 ;
+    tu:dti          "0.27"^^xsd:decimal ;
+    tu:hasDefault   false ;
+    tu:city         "Mumbai" ;
+    tu:sharesPhone     data:phone_RAHUL ;
+    tu:livesAt         data:address_RAHUL ;
+    tu:claimsEmployer  data:employer_RAHUL .
+
+data:borrower_ANITA
+    a tu:Borrower ;
+    tu:name         "Anita Singh" ;
+    tu:creditScore  730 ;
+    tu:dti          "0.30"^^xsd:decimal ;
+    tu:hasDefault   false ;
+    tu:city         "Chennai" ;
+    tu:sharesPhone     data:phone_ANITA ;
+    tu:livesAt         data:address_ANITA ;
+    tu:claimsEmployer  data:employer_ANITA .
+
+
+# ============================================================
+# LOAN APPLICATION RECORDS
+# (Separate from borrowers to show RDF intermediate node pattern)
+# ============================================================
+
+data:loan_RAJAN
+    a tu:Loan ;
+    tu:loanAmount   "350000"^^xsd:decimal ;
+    tu:loanPurpose  "personal" ;
+    rdfs:label      "Rajan Verma loan application Rs 3.5L"@en .
+data:borrower_RAJAN tu:hasLoan data:loan_RAJAN .
+
+data:loan_SUNITA
+    a tu:Loan ;
+    tu:loanAmount   "750000"^^xsd:decimal ;
+    tu:loanPurpose  "home" ;
+    rdfs:label      "Sunita Rao loan application Rs 7.5L"@en .
+data:borrower_SUNITA tu:hasLoan data:loan_SUNITA .
+
+data:loan_ARJUN
+    a tu:Loan ;
+    tu:loanAmount   "500000"^^xsd:decimal ;
+    tu:loanPurpose  "business" ;
+    rdfs:label      "Arjun Kapoor loan application Rs 5L"@en .
+data:borrower_ARJUN tu:hasLoan data:loan_ARJUN .
+
+data:loan_MEERA_B
+    a tu:Loan ;
+    tu:loanAmount   "600000"^^xsd:decimal ;
+    tu:loanPurpose  "personal" ;
+    rdfs:label      "Meera Sharma loan application Rs 6L"@en .
+data:borrower_MEERA_B tu:hasLoan data:loan_MEERA_B .
+
+data:loan_PRIYA_C
+    a tu:Loan ;
+    tu:loanAmount   "800000"^^xsd:decimal ;
+    tu:loanPurpose  "personal" ;
+    rdfs:label      "Priya Patel loan application Rs 8L"@en .
+data:borrower_PRIYA_C tu:hasLoan data:loan_PRIYA_C .
+
+data:loan_LAKSHMI
+    a tu:Loan ;
+    tu:loanAmount   "400000"^^xsd:decimal ;
+    tu:loanPurpose  "auto" ;
+    rdfs:label      "Lakshmi Patel loan application Rs 4L"@en .
+data:borrower_LAKSHMI tu:hasLoan data:loan_LAKSHMI .
+
+data:loan_RAHUL
+    a tu:Loan ;
+    tu:loanAmount   "500000"^^xsd:decimal ;
+    tu:loanPurpose  "personal" ;
+    rdfs:label      "Rahul Mehta loan application Rs 5L (CLEAN)"@en .
+data:borrower_RAHUL tu:hasLoan data:loan_RAHUL .
+
+data:loan_ANITA
+    a tu:Loan ;
+    tu:loanAmount   "300000"^^xsd:decimal ;
+    tu:loanPurpose  "auto" ;
+    rdfs:label      "Anita Singh loan application Rs 3L (CLEAN)"@en .
+data:borrower_ANITA tu:hasLoan data:loan_ANITA .
+
+# ============================================================
+# KNOWN CLASSES (for Class definition completion)
+tu:Loan a rdfs:Class ;
+    rdfs:label    "Loan"@en ;
+    rdfs:comment  "A loan application."@en .
+
+tu:loanAmount a owl:DatatypeProperty ;
+    rdfs:domain  tu:Loan ;
+    rdfs:range   xsd:decimal .
+
+tu:loanPurpose a owl:DatatypeProperty ;
+    rdfs:domain  tu:Loan ;
+    rdfs:range   xsd:string .
+
+tu:hasLoan a owl:ObjectProperty ;
+    rdfs:domain  tu:Borrower ;
+    rdfs:range   tu:Loan .
+
+# ============================================================
+# END OF fraud_network.ttl
+#
+# Entities summary:
+#   10 Borrowers: Vijay*, Rajan, Sunita (Ring A) |
+#                 Arjun, Meera_B, Dev* (Ring B) |
+#                 Suresh*, Priya_C, Lakshmi (Ring C) |
+#                 Rahul, Anita (CLEAN)
+#                 (* = known defaulter)
+#   3 Shared phones, addresses, employers, devices
+#   3 Default records
+#   8 Loan applications
+# ============================================================
+
+# ── CROSS-RING BRIDGE (makes 3-hop traversal realistic) ─────
+# Rajan (Ring A) uses the same device as Arjun (Ring B)
+# This is how real fraud rings sometimes overlap
+
+data:device_BRIDGE
+    a tu:Device ;
+    tu:name "MOBILE_HASH_C9D2E1F0" ;
+    rdfs:label "Shared mobile — bridge between Ring A and Ring B"@en .
+
+data:borrower_RAJAN tu:usesDevice data:device_BRIDGE .
+data:borrower_ARJUN tu:usesDevice data:device_BRIDGE .

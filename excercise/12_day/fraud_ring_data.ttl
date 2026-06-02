@@ -1,0 +1,179 @@
+# ============================================================
+# Day 7 Exercise: Fraud Ring Detection Using Graph Traversal
+# File: fraud_ring_data.ttl
+#
+# Scenario: A credit fraud ring in TransUnion's graph.
+# Three fraudsters (Vijay, Meera, Suresh) are working together.
+# They have different PANs but share devices, phones, addresses.
+# One known defaulter (Vijay). SQL misses Meera and Suresh.
+# Graph catches all three.
+#
+# Day 7 Learning:
+#   - How relationships form fraud rings
+#   - Why SQL misses them (no JOINs for variable-depth)
+#   - How graph traversal detects them in one query
+#   - Property graph (Neo4j/Cypher) vs RDF (SPARQL) comparison
+# ============================================================
+
+@prefix rdf:  <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd:  <http://www.w3.org/2001/XMLSchema#> .
+@prefix tu:   <http://transunion.com/ontology#> .
+@prefix data: <http://transunion.com/data#> .
+
+
+# ── BORROWERS (6 total: 3 in fraud ring, 3 legitimate) ──────
+
+# FRAUD RING MEMBER 1: Vijay Sharma — KNOWN DEFAULTER
+# SQL would flag him. But does SQL find his associates?
+data:borrower_VIJAY
+    a tu:Borrower ;
+    tu:name          "Vijay Sharma" ;
+    tu:creditScore   480 ;
+    tu:dti           "0.72"^^xsd:decimal ;
+    tu:hasDefault    true ;              # Known defaulter — blacklisted
+    tu:defaultDate   "2025-09-15"^^xsd:date ;
+    tu:defaultAmount "450000"^^xsd:decimal .
+
+# FRAUD RING MEMBER 2: Meera Nair — SQL sees CLEAN RECORD
+# But she shares phone and address with Vijay!
+data:borrower_MEERA
+    a tu:Borrower ;
+    tu:name        "Meera Nair" ;
+    tu:creditScore 680 ;                 # Looks acceptable!
+    tu:dti         "0.38"^^xsd:decimal ; # Looks acceptable!
+    tu:hasDefault  false .               # No defaults — SQL says CLEAN
+
+# FRAUD RING MEMBER 3: Suresh Kumar — SQL sees CLEAN RECORD
+# But he shares device with Meera and employer with Vijay!
+data:borrower_SURESH
+    a tu:Borrower ;
+    tu:name        "Suresh Kumar" ;
+    tu:creditScore 710 ;                 # Looks good!
+    tu:dti         "0.31"^^xsd:decimal ; # Looks good!
+    tu:hasDefault  false .               # No defaults — SQL says CLEAN
+
+# LEGITIMATE BORROWER 1: Rahul Mehta — genuinely good borrower
+data:borrower_RAHUL
+    a tu:Borrower ;
+    tu:name        "Rahul Mehta" ;
+    tu:creditScore 755 ;
+    tu:dti         "0.27"^^xsd:decimal ;
+    tu:hasDefault  false .
+
+# LEGITIMATE BORROWER 2: Priya Rao — good borrower
+data:borrower_PRIYA
+    a tu:Borrower ;
+    tu:name        "Priya Rao" ;
+    tu:creditScore 720 ;
+    tu:dti         "0.33"^^xsd:decimal ;
+    tu:hasDefault  false .
+
+# LEGITIMATE BORROWER 3: Arjun Singh — good borrower
+data:borrower_ARJUN
+    a tu:Borrower ;
+    tu:name        "Arjun Singh" ;
+    tu:creditScore 695 ;
+    tu:dti         "0.40"^^xsd:decimal ;
+    tu:hasDefault  false .
+
+
+# ── SHARED ENTITIES (the fraud ring connections) ─────────────
+
+# Shared phone — Vijay and Meera use same phone number
+data:phone_9876543210
+    a tu:PhoneNumber ;
+    tu:phoneNumber "9876543210" .
+
+# Shared address — Vijay and Meera live at same address
+data:address_RING_HQ
+    a tu:Address ;
+    tu:street "12 MG Road" ;
+    tu:city   "Bangalore" ;
+    tu:pin    "560001" .
+
+# Shared device — Meera and Suresh use same laptop
+data:device_LAPTOP_X7
+    a tu:Device ;
+    tu:deviceId   "LAPTOP_X7_HASH_9f8e7d" ;
+    tu:deviceType "laptop" .
+
+# Shared employer — Vijay and Suresh claim same employer
+data:employer_FAKE_CO
+    a tu:Employer ;
+    tu:employerName "FastTech Solutions Pvt Ltd" ;
+    tu:gstin        "29AABCU9603R1Z1" .  # Check: is this registered?
+
+
+# ── FRAUD RING RELATIONSHIP TRIPLES ──────────────────────────
+# These triples CREATE the graph edges that reveal the fraud ring
+
+# Vijay ↔ Meera connections (1 hop)
+data:borrower_VIJAY tu:sharesPhone   data:phone_9876543210 .
+data:borrower_MEERA tu:sharesPhone   data:phone_9876543210 .
+
+data:borrower_VIJAY tu:livesAt data:address_RING_HQ .
+data:borrower_MEERA tu:livesAt data:address_RING_HQ .
+
+# Meera ↔ Suresh connections (so Suresh is 2 hops from Vijay)
+data:borrower_MEERA  tu:usesDevice data:device_LAPTOP_X7 .
+data:borrower_SURESH tu:usesDevice data:device_LAPTOP_X7 .
+
+data:borrower_VIJAY  tu:claimsEmployer data:employer_FAKE_CO .
+data:borrower_SURESH tu:claimsEmployer data:employer_FAKE_CO .
+
+
+# ── LOAN APPLICATIONS ────────────────────────────────────────
+
+# Meera's NEW application — looks clean to SQL, fraud ring to graph
+data:loan_MEERA_001
+    a tu:Loan ;
+    tu:loanAmount  "350000"^^xsd:decimal ;
+    tu:loanPurpose "personal" .
+
+data:borrower_MEERA tu:hasLoan data:loan_MEERA_001 .
+
+# Suresh's NEW application — also looks clean to SQL
+data:loan_SURESH_001
+    a tu:Loan ;
+    tu:loanAmount  "500000"^^xsd:decimal ;
+    tu:loanPurpose "business" .
+
+data:borrower_SURESH tu:hasLoan data:loan_SURESH_001 .
+
+# Rahul's application — genuinely clean
+data:loan_RAHUL_001
+    a tu:Loan ;
+    tu:loanAmount  "200000"^^xsd:decimal ;
+    tu:loanPurpose "auto" .
+
+data:borrower_RAHUL tu:hasLoan data:loan_RAHUL_001 .
+
+
+# ── LEGITIMATE CONNECTIONS (for contrast) ────────────────────
+# These borrowers share some attributes (same city)
+# but are NOT connected to the fraud ring
+
+data:address_RAHUL
+    a tu:Address ;
+    tu:city "Bangalore" ;
+    tu:pin  "560002" .   # Different PIN — different area
+
+data:borrower_RAHUL  tu:livesAt data:address_RAHUL .
+data:borrower_PRIYA  tu:livesAt data:address_RAHUL .
+
+# ============================================================
+# WHAT THE GRAPH SHOWS:
+#
+# Fraud ring (connected via shared entities):
+#   VIJAY ──[sharesPhone]──── phone_9876 ──[sharesPhone]──── MEERA
+#   VIJAY ──[livesAt]──── address_12MG ──[livesAt]──── MEERA
+#   MEERA ──[usesDevice]──── laptop_X7 ──[usesDevice]──── SURESH
+#   VIJAY ──[claimsEmployer]──── FastTech ──[claimsEmployer]──── SURESH
+#
+# SQL sees: Meera=680/0.38 (acceptable). Suresh=710/0.31 (good).
+# Graph sees: Both connected to VIJAY (known defaulter) within 2 hops.
+#
+# Without graph: Meera and Suresh get loans → default → TransUnion loses money
+# With graph: Fraud ring detected → applications rejected → risk avoided
+# ============================================================

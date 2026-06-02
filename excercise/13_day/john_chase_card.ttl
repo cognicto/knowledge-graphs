@@ -1,0 +1,118 @@
+# ============================================================
+# Day 6 Exercise: John Doe's $5,000 Chase Credit Card
+# File: john_chase_card.ttl
+#
+# Purpose: Model a single real-world scenario as RDF triples.
+# Scenario: John Doe holds a $5,000 limit Chase credit card
+#           opened January 2020. He also has a credit score
+#           of 720 from Equifax. Connect all facts as triples.
+#
+# Key Learning:
+#   - Every fact = one triple (Subject → Predicate → Object)
+#   - Entities get URIs (not database IDs)
+#   - Values get literals (strings, integers, dates)
+#   - Relationships create the GRAPH structure
+# ============================================================
+
+
+# ── NAMESPACE DECLARATIONS ───────────────────────────────────
+# Like Python imports — define short prefixes for long URIs
+
+@prefix rdf:  <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd:  <http://www.w3.org/2001/XMLSchema#> .
+
+# Our custom namespaces
+@prefix tu:   <http://transunion.com/ontology#> .   # schema terms
+@prefix data: <http://transunion.com/data#> .       # data instances
+
+
+# ── ENTITY 1: John Doe (the Borrower) ───────────────────────
+# URI design: domain/type/unique-identifier
+# We use PAN number as the canonical identifier (India)
+# PAN is globally unique and non-PII in the URI path
+
+data:borrower_PAN_ABCDE1234F
+    a tu:Borrower ;                              # IS A Borrower (type declaration)
+    tu:name         "John Doe" ;                 # HAS name (literal string)
+    tu:dateOfBirth  "1985-03-15"^^xsd:date ;     # HAS date of birth (typed date)
+    tu:panNumber    "ABCDE1234F" ;               # HAS PAN (canonical identifier)
+    tu:hasAccount   data:account_CHASE_CC001 ;   # HAS credit card (relationship!)
+    tu:hasReport    data:report_EQUIFAX_2026 .   # HAS credit report (relationship!)
+
+
+# ── ENTITY 2: Chase Credit Card (the Account) ───────────────
+# URI: we use bank code + account type + masked account number
+# Note: full account number never goes in a URI (security risk)
+
+data:account_CHASE_CC001
+    a tu:CreditCard ;                             # IS A CreditCard
+    tu:creditLimit      5000 ;                    # HAS limit Rs 5000 (integer)
+    tu:openedDate       "2020-01-15"^^xsd:date ;  # HAS opened date (typed date)
+    tu:accountStatus    "ACTIVE" ;                # HAS status (string)
+    tu:issuedBy         data:bank_CHASE ;         # ISSUED BY Chase Bank (relationship)
+    tu:currentBalance   "1250"^^xsd:decimal ;     # HAS current balance outstanding
+    tu:utilizationRate  "0.25"^^xsd:decimal .     # HAS utilization = 1250/5000 = 25%
+
+
+# ── ENTITY 3: Chase Bank (the Lender) ───────────────────────
+# Lenders are well-known entities — we use their official name as identifier
+
+data:bank_CHASE
+    a tu:Lender ;
+    tu:name             "Chase Bank (JPMorgan Chase)" ;
+    tu:bankCode         "CHASE_US" ;
+    tu:country          "US" ;
+    rdfs:label          "Chase Bank"@en .
+
+
+# ── ENTITY 4: Equifax Credit Report ─────────────────────────
+# Each credit report is a distinct entity — has its own URI
+# because it's a specific report at a specific point in time
+
+data:report_EQUIFAX_2026
+    a tu:CreditReport ;
+    tu:creditScore      720 ;                            # HAS score (integer)
+    tu:reportDate       "2026-05-20"^^xsd:date ;        # HAS report date
+    tu:bureau           "Equifax" ;                      # HAS source bureau
+    tu:delinquencies    0 ;                              # HAS delinquency count
+    tu:totalAccounts    3 ;                              # HAS total accounts
+    tu:forBorrower      data:borrower_PAN_ABCDE1234F .  # FOR this borrower
+
+
+# ── ADDITIONAL FACTS ─────────────────────────────────────────
+# These triples show how the same borrower connects to more facts
+# This is what makes graphs powerful — every new fact just adds triples
+# No schema changes needed!
+
+# John's employment (adds triples, doesn't change existing ones)
+data:borrower_PAN_ABCDE1234F
+    tu:employedAt   "TechCorp India" ;
+    tu:monthlyIncome "75000"^^xsd:decimal ;
+    tu:employmentType "SALARIED" .
+
+# Derived facts (will be computed by SHACL rules in Week 4-5)
+# For now, we store them manually to demonstrate the concept
+data:borrower_PAN_ABCDE1234F
+    tu:totalMonthlyDebt "1250"^^xsd:decimal ;   # Just the Chase card balance/12
+    tu:dti              "0.017"^^xsd:decimal .   # 1250/75000 = 1.7% (very low!)
+
+
+# ── THE COMPLETE GRAPH (what we now have) ────────────────────
+#
+#   "John Doe" ←[name]── ● borrower_PAN_ABCDE1234F ──[type]──▶ tu:Borrower
+#                                │
+#                    ┌──────────┼──────────────┐
+#                    │          │              │
+#             [hasAccount] [hasReport]  [employedAt]
+#                    │          │              │
+#                    ▼          ▼              ▼
+#         ● account_CHASE_CC001  ● report_EQUIFAX_2026  "TechCorp India"
+#                │                       │
+#          [issuedBy]            [creditScore]
+#                │                       │
+#                ▼                       ▼
+#         ● bank_CHASE                  720
+#
+# Total: ~25 triples, 4 entities, all connected by relationships
+# ============================================================
